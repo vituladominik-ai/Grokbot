@@ -6,7 +6,7 @@ const defaults=()=>({cash:50,starting:50,dayStart:50,dayKey:new Date().toISOStri
 let state;try{state={...defaults(),...JSON.parse(localStorage.getItem(stateKey)||"{}")};state.limits={...defaults().limits,...(state.limits||{})}}catch{state=defaults()}
 let tokens=[],feedAt=null,refreshing=false,scanTimer=null;
 const save=()=>localStorage.setItem(stateKey,JSON.stringify(state));
-const notify=msg=>{const t=$("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2300)};
+const notify=msg=>{const t=$("toast");if(!t)return;t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2300)};
 const equity=()=>state.cash+state.positions.reduce((sum,p)=>{const price=tokens.find(t=>t.address===p.address)?.priceUsd??p.lastPrice??p.entry;return sum+p.qty*price*(1-.008)*(1-.005)},0);
 const dayPnl=()=>equity()-state.dayStart;
 function riskStop(){return dayPnl()<=-state.limits.dailyStop}
