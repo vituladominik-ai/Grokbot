@@ -187,5 +187,144 @@ test("Portfolio unchanged",JSON.stringify(state)===originalState);
   notify(failed?"Diagnostics: some tests failed":"Diagnostics: all tests passed");
 }
 
+
+function runBacktest(){
+  const output=$("simResults");
+  const balanceStart=Number($("simBalance").value);
+  const positionSize=Number($("simPosition").value);
+  const minScore=Number($("simScore").value);
+
+  if(!balanceStart||!positionSize||positionSize<=0){
+    output.textContent="Enter a valid balance and position size.";
+    return;
+  }
+
+  let history=[];
+  try{
+    history=JSON.parse(localStorage.getItem("grokbot-price-history-v1")||"[]");
+  }catch(e){
+    history=[];
+  }
+
+  history=history.filter(p=>
+    p&&p.address&&Number(p.time)>0&&
+    Number(p.price)>0&&Number.isFinite(Number(p.score))
+  );
+
+  if(history.length<2){
+    output.textContent="Not enough historical data yet. Keep GROKBOT open while it collects market observations.";
+    return;
+  }
+
+  const grouped={};
+  for(const point of history){
+    if(!grouped[point.address])grouped[point.address]=[];
+    grouped[point.address].push(point);
+  }
+
+  const trades=[];
+
+  for(const address of Object.keys(grouped)){
+    const points=grouped[address].sort((a,b)=>a.time-b.time);
+    if(points.length<2)continue;
+
+    const entry=points.find(p=>Number(p.score)>=minScore);
+    if(!entry)continue;
+
+    const spend=Math.min(positionSize,balanceStart);
+    const buyFee=spend*.005;
+    const buyPrice=Number(entry.price)*1.008;
+    const quantity=(spend-buyFee)/buyPrice;
+
+    let exit=points[points.length-1];
+    let reason="End of recorded data";
+
+    for(const point of points){
+      if(point.time<=entry.time)continue;
+      const proceeds=quantity*Number(point.price)*.992*.995;
+      const pnl=proceeds-spend;
+      const percent=pnl/spend*100;
+
+      if(percent<=-10){
+        exit=point;
+        reason="Stop loss";
+        break;
+      }
+      if(percent>=20){
+        exit=point;
+        reason="Take profit";
+        break;
+      }
+    }
+
+    const sellValue=quantity*Number(exit.price)*.992*.995;
+    trades.push({
+      symbol:entry.symbol||"Unknown",
+      time:Number(entry.time),
+      pnl:sellValue-spend,
+      reason
+    });
+  }
+
+  trades.sort((a,b)=>a.time-b.time);
+
+  if(!trades.length){
+    output.textContent=
+      "No qualifying trades found. Collect more data or adjust the minimum score.";
+    return;
+  }
+
+  let balance=balanceStart;
+  let peak=balanceStart;
+  let maxDrawdown=0;
+  let wins=0;
+  let grossProfit=0;
+  let grossLoss=0;
+
+  for(const trade of trades){
+    const actualSpend=Math.min(positionSize,balance);
+    if(actualSpend<=0)break;
+
+    const scale=actualSpend/Math.min(positionSize,balanceStart);
+    const pnl=trade.pnl*scale;
+
+    balance+=pnl;
+    if(pnl>0){
+      wins++;
+      grossProfit+=pnl;
+    }else{
+      grossLoss+=Math.abs(pnl);
+    }
+
+    peak=Math.max(peak,balance);
+    const drawdown=peak>0?(peak-balance)/peak*100:0;
+    maxDrawdown=Math.max(maxDrawdown,drawdown);
+  }
+
+  const completed=trades.length;
+  const netPnl=balance-balanceStart;
+  const returnPct=netPnl/balanceStart*100;
+  const winRate=wins/completed*100;
+  const profitFactor=grossLoss>0?(grossProfit/grossLoss).toFixed(2):"N/A";
+
+  output.innerHTML=
+    `<b>Backtest results</b><br>`+
+    `Recorded observations: ${history.length}<br>`+
+    `Tokens analyzed: ${Object.keys(grouped).length}<br>`+
+    `Trades: ${completed}<br>`+
+    `Win rate: ${winRate.toFixed(1)}%<br>`+
+    `Starting balance: $${balanceStart.toFixed(2)}<br>`+
+    `Final balance: $${balance.toFixed(2)}<br>`+
+    `Net P/L: ${netPnl>=0?"+":""}$${netPnl.toFixed(2)} (${returnPct.toFixed(2)}%)<br>`+
+    `Max drawdown: ${maxDrawdown.toFixed(2)}%<br>`+
+    `Profit factor: ${profitFactor}<br><br>`+
+    `<small>Paper simulation only. Uses recorded observations, estimated fees and slippage. Small samples are not reliable predictions.</small>`;
+
+  output.className="notice";
+}
+
+$("runBacktest").addEventListener("click",runBacktest);
 $("runDiagnostics").addEventListener("click",runDiagnostics);
+
 render();refreshMarket();scheduleScanner();
+
