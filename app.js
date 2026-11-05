@@ -7,7 +7,7 @@ let state;try{state={...defaults(),...JSON.parse(localStorage.getItem(stateKey)|
 let tokens=[],feedAt=null,refreshing=false,scanTimer=null;
 const save=()=>localStorage.setItem(stateKey,JSON.stringify(state));
 const notify=msg=>{const t=$("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2300)};
-const equity=()=>state.cash+state.positions.reduce((sum,p)=>sum+p.qty*(tokens.find(t=>t.address===p.address)?.priceUsd??p.lastPrice??p.entry),0);
+const equity=()=>state.cash+state.positions.reduce((sum,p)=>{const price=tokens.find(t=>t.address===p.address)?.priceUsd??p.lastPrice??p.entry;return sum+p.qty*price*(1-.008)*(1-.005)},0);
 const dayPnl=()=>equity()-state.dayStart;
 function riskStop(){return dayPnl()<=-state.limits.dailyStop}
 function candidatePass(t){return !t.unavailable&&t.score>=state.limits.minScore&&t.liquidityUsd>=15000&&t.volume5mUsd>=5000&&(t.buys5m+t.sells5m)>=12&&t.buys5m>t.sells5m&&t.priceChange5m>-8&&t.priceChange5m<30&&t.risk!=="HIGH"}
