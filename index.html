@@ -24,10 +24,42 @@
 <section class="panel" id="tab-positions">
  <div class="sectionHead"><div><h2>Open positions</h2><p>Paper fills include estimated fees and slippage</p></div></div><div id="positionsList" class="list empty">No open paper positions.</div>
 </section>
-<section class="panel" id="tab-activity">
+<section class="panel" id="tab-activity"> 
  <div class="sectionHead"><div><h2>Trade history</h2><p>Stored locally on this device</p></div><button id="export" class="button secondary">Export CSV</button></div><div id="tradeList" class="list empty">No paper trades yet.</div>
 </section>
-<section class="panel" id="tab-settings">
+<section class="panel" id="tab-simulator">
+  <div class="sectionHead">
+    <div>
+      <h2>Trade Simulator</h2>
+      <p>Test trading strategies without risking real money</p>
+    </div>
+  </div>
+
+  <div class="settingsCard">
+    <h3>Backtest settings</h3>
+
+    <label>Starting balance (USD)
+      <input id="simBalance" type="number" min="10" value="100">
+    </label>
+
+    <label>Position size (USD)
+      <input id="simPosition" type="number" min="1" value="5">
+    </label>
+
+    <label>Minimum score
+      <input id="simScore" type="number" min="0" max="100" value="72">
+    </label>
+
+    <button id="runBacktest" class="button">Run simulation</button>
+  </div>
+
+  <div class="settingsCard">
+    <h3>Simulation results</h3>
+    <div id="simResults" class="notice">
+      No simulation has been run yet.
+    </div>
+  </div>
+</section><section class="panel" id="tab-settings">
  <div class="sectionHead"><div><h2>Risk controls</h2><p>Enforced by this paper engine</p></div></div>
  <div class="settingsCard">
   <div class="setting"><div><b>Auto paper trading</b><small>Open simulated positions when filters pass</small></div><button id="autoToggle" class="toggle on" aria-label="Toggle auto paper trading"></button></div>
