@@ -32,7 +32,7 @@ function processPaper(){
  for(const p of [...state.positions]){
   const price=currentPrice(p.address);if(!price)continue;p.lastPrice=price;
   const netValue=p.qty*price*(1-.008)*(1-.005);
-const ret=(netValue-p.cost)/p.cost*100;
+  const ret=(netValue-p.cost)/p.cost*100;
   if(ret<=-10)sell(p,"Stop loss",price);else if(ret>=20)sell(p,"Take profit",price);
  }
  if(state.auto&&!state.paused&&!riskStop()){
@@ -54,8 +54,8 @@ function render(){
   return `<article class="token"><div class="tokenMain"><div class="tokenTitle"><b>${esc(t.name)}</b><span class="symbol">$${esc(t.symbol)}</span></div><div class="tokenMeta">${money(t.liquidityUsd)} liquidity · ${money(t.volume5mUsd)} 5m vol<br>${t.buys5m} buys / ${t.sells5m} sells · ${esc(t.dexId)} · ${esc(t.risk)}</div><div class="tiny">${esc(t.reasons?.join(" · ")||"No obvious market filter flags; token safety is not verified.")}</div></div><div class="tokenRight"><div class="price">${tokenPrice(t.priceUsd)}</div><div class="change ${t.priceChange5m>=0?"positive":"negative"}">${t.priceChange5m>=0?"+":""}${Number(t.priceChange5m).toFixed(2)}% 5m</div><span class="score ${risk}">${t.score??"—"} SCORE</span><div style="margin-top:6px"><button class="button secondary" data-buy="${esc(t.address)}" ${!ok||state.paused||state.positions.length>=state.limits.maxPositions?"disabled":""}>Paper buy</button></div></div></article>`;
  }).join(""):'<div class="empty">No eligible candidates received. Refresh to retry.</div>';
  $("positionsList").className="list";$("positionsList").innerHTML=state.positions.length?state.positions.map(p=>{const price=currentPrice(p.address)??p.lastPrice??p.entry;
-const netValue=p.qty*price*(1-.008)*(1-.005);
-const ret=(netValue-p.cost)/p.cost*100;return `<div class="position"><div><b>${esc(p.name)} · $${esc(p.symbol)}</b><small>Entry ${tokenPrice(p.entry)} · Qty ${p.qty.toFixed(3)}</small></div><div style="text-align:right"><b class="${ret>=0?"positive":"negative"}">${ret>=0?"+":""}${ret.toFixed(2)}%</b><small>Now ${tokenPrice(price)}</small><button class="button secondary" data-sell="${p.id}" style="margin-top:6px">Close paper</button></div></div>`}).join(""):'<div class="empty">No open paper positions.</div>';
+ const netValue=p.qty*price*(1-.008)*(1-.005);
+ const ret=(netValue-p.cost)/p.cost*100;return `<div class="position"><div><b>${esc(p.name)} · $${esc(p.symbol)}</b><small>Entry ${tokenPrice(p.entry)} · Qty ${p.qty.toFixed(3)}</small></div><div style="text-align:right"><b class="${ret>=0?"positive":"negative"}">${ret>=0?"+":""}${ret.toFixed(2)}%</b><small>Now ${tokenPrice(price)}</small><button class="button secondary" data-sell="${p.id}" style="margin-top:6px">Close paper</button></div></div>`}).join(""):'<div class="empty">No open paper positions.</div>';
  $("tradeList").className="list";$("tradeList").innerHTML=state.trades.length?state.trades.map(t=>`<div class="position"><div><b>${esc(t.type)} · $${esc(t.symbol)}</b><small>${new Date(t.time).toLocaleString()} · ${esc(t.note)}</small></div><div style="text-align:right"><b>${money(t.amount)}</b><small>${t.qty.toFixed(3)} units</small></div></div>`).join(""):'<div class="empty">No trades yet.</div>';
 }
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
@@ -83,7 +83,7 @@ function normalize(p){
  t.risk=reasons.length>=3?"HIGH":reasons.length?"ELEVATED":"UNASSESSED";t.reasons=reasons;t.score=score(t);return t;
 }
 async function refreshMarket(){
- if(refreshing||document.visibilityState==="hidden")return;refreshing=true;$("refresh").disabled=true;$("feedStatus").textContent="Refreshing live DEX data…";
+ if(refreshing||document.visibilityState==="hidden")return;refreshing=true;$("refresh").disabled=true;$("feedStatus").textContent="Refreshing live market data…";
  try{
   const [profiles,boosts]=await Promise.all([fetchJson("https://api.dexscreener.com/token-profiles/latest/v1"),fetchJson("https://api.dexscreener.com/token-boosts/latest/v1")]);
   const candidates=new Map();
@@ -98,26 +98,17 @@ async function refreshMarket(){
    rows.push(...got.filter(Boolean));
   }
   tokens=rows.sort((a,b)=>b.score-a.score);feedAt=new Date().toISOString();
- const historyKey="grokbot-price-history-v1";
-let history=[];
-try{history=JSON.parse(localStorage.getItem(historyKey)||"[]")}catch(e){history=[]}
-const snapshotTime=Date.now();
-for(const t of tokens){
-  if(t.priceUsd>0){
-    history.push({
-      time:snapshotTime,
-      address:t.address,
-      symbol:t.symbol,
-      price:t.priceUsd,
-      score:t.score
-    });
+  const historyKey="grokbot-price-history-v1";
+  let history=[];
+  try{history=JSON.parse(localStorage.getItem(historyKey)||"[]")}catch(e){history=[]}
+  const snapshotTime=Date.now();
+  for(const t of tokens){
+   if(t.priceUsd>0){
+    history.push({time:snapshotTime,address:t.address,symbol:t.symbol,price:t.priceUsd,score:t.score});
+   }
   }
-}
-try{localStorage.setItem(historyKey,JSON.stringify(history.slice(-12000)))}catch(e){}
-
-
-$("feedDot").className="dot";
-  
+  try{localStorage.setItem(historyKey,JSON.stringify(history.slice(-12000)))}catch(e){}
+  $("feedDot").className="dot";
   $("lastUpdated").textContent=new Date(feedAt).toLocaleTimeString();
   $("discoveryNote").textContent="Discovery is partial: DEX Screener profile/boost lists are not a complete feed of every new Pump.fun launch. A score is a heuristic, not a rug-pull or holder audit.";
   processPaper();render();
@@ -142,207 +133,144 @@ $("export").addEventListener("click",()=>{const rows=[["time","type","symbol","m
 if("serviceWorker" in navigator)navigator.serviceWorker.register("./service-worker.js").catch(()=>{});
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refreshMarket()});
 function runDiagnostics(){
-  const results=[];
-  const test=(name,condition)=>results.push({name,passed:Boolean(condition)});
-  const originalState=JSON.stringify(state);
-
-  const spend=5;
-  const buyFee=spend*.005;
-  const fill=1*1.008;
-  const qty=(spend-buyFee)/fill;
-  const sellGross=qty*1.2*(1-.008);
-  const sellFee=sellGross*.005;
-  const proceeds=sellGross-sellFee;
-  const pnl=proceeds-spend;
-  const netReturn=pnl/spend*100;
-
-  test("Buy fee calculation",Math.abs(buyFee-.025)<.000001);
-test("Buy slippage calculation",Math.abs(fill-1.008)<.000001);
-test("Sell fee calculation",sellFee>0);
-test("Net P/L calculation",Math.abs(netReturn-((proceeds-spend)/spend*100))<.000001);
-
-const stopTriggered=value=>value<=-10;
-const takeTriggered=value=>value>=20;
-const dailyStopTriggered=loss=>loss<=-state.limits.dailyStop;
-const openLimitReached=count=>count>=state.limits.maxPositions;
-
-test("Stop loss boundary",stopTriggered(-10)&&!stopTriggered(-9.99));
-test("Take profit boundary",takeTriggered(20)&&!takeTriggered(19.99));
-test("Daily loss limit",dailyStopTriggered(-state.limits.dailyStop));
-test("Position size cap",Math.min(5,state.limits.maxPosition)<=state.limits.maxPosition);
-test("Open positions cap",openLimitReached(state.limits.maxPositions));
-test("Portfolio unchanged",JSON.stringify(state)===originalState);
-
-  const passed=results.filter(r=>r.passed).length;
-  const failed=results.length-passed;
-  const output=document.getElementById("diagnosticsResult");
-
-  output.innerHTML=
-    `<b>${passed}/${results.length} tests passed</b><br>`+
-    results.map(r=>
-      `${r.passed?"✅":"❌"} ${r.name}`
-    ).join("<br>");
-
-  output.className="notice "+(failed?"security":"");
-  notify(failed?"Diagnostics: some tests failed":"Diagnostics: all tests passed");
+ const results=[];
+ const test=(name,condition)=>results.push({name,passed:Boolean(condition)});
+ const originalState=JSON.stringify(state);
+ const spend=5,buyFee=spend*.005,fill=1*1.008,qty=(spend-buyFee)/fill;
+ const sellGross=qty*1.2*(1-.008),sellFee=sellGross*.005,proceeds=sellGross-sellFee,pnl=proceeds-spend,netReturn=pnl/spend*100;
+ test("Buy fee calculation",Math.abs(buyFee-.025)<.000001);
+ test("Buy slippage calculation",Math.abs(fill-1.008)<.000001);
+ test("Sell fee calculation",sellFee>0);
+ test("Net P/L calculation",Math.abs(netReturn-((proceeds-spend)/spend*100))<.000001);
+ const stopTriggered=value=>value<=-10,takeTriggered=value=>value>=20,dailyStopTriggered=loss=>loss<=-state.limits.dailyStop,openLimitReached=count=>count>=state.limits.maxPositions;
+ test("Stop loss boundary",stopTriggered(-10)&&!stopTriggered(-9.99));
+ test("Take profit boundary",takeTriggered(20)&&!takeTriggered(19.99));
+ test("Daily loss limit",dailyStopTriggered(-state.limits.dailyStop));
+ test("Position size cap",Math.min(5,state.limits.maxPosition)<=state.limits.maxPosition);
+ test("Open positions cap",openLimitReached(state.limits.maxPositions));
+ test("Portfolio unchanged",JSON.stringify(state)===originalState);
+ const passed=results.filter(r=>r.passed).length,failed=results.length-passed,output=document.getElementById("diagnosticsResult");
+ output.innerHTML=`<b>${passed}/${results.length} tests passed</b><br>`+results.map(r=>`${r.passed?"✅":"❌"} ${r.name}`).join("<br>");
+ output.className="notice "+(failed?"security":"");
+ notify(failed?"Diagnostics: some tests failed":"Diagnostics: all tests passed");
 }
 
+function loadPriceHistory(){
+ let history=[];
+ try{history=JSON.parse(localStorage.getItem("grokbot-price-history-v1")||"[]")}catch(e){history=[]}
+ return history.filter(p=>p&&p.address&&Number(p.time)>0&&Number(p.price)>0&&Number.isFinite(Number(p.score)))
+  .map(p=>({...p,time:Number(p.time),price:Number(p.price),score:Number(p.score)}))
+  .sort((a,b)=>a.time-b.time);
+}
 
+// One shared cash balance and a hard cap on simultaneous positions are used
+// for both the normal backtest and every optimizer candidate.
+function simulatePortfolio(history,cfg){
+ const snapshots=new Map(),lastByAddress=new Map();
+ for(const point of history){
+  if(!snapshots.has(point.time))snapshots.set(point.time,[]);
+  snapshots.get(point.time).push(point);
+  const old=lastByAddress.get(point.address);
+  if(!old||point.time>=old.time)lastByAddress.set(point.address,point);
+ }
+ const times=[...snapshots.keys()].sort((a,b)=>a-b);
+ let cash=cfg.balance,peak=cfg.balance,maxDrawdown=0;
+ const open=new Map(),traded=new Set(),trades=[];
+ const markEquity=()=>{
+  let value=cash;
+  for(const pos of open.values())value+=pos.qty*(pos.lastPrice||pos.entryPrice)*.992*.995;
+  peak=Math.max(peak,value);
+  if(peak>0)maxDrawdown=Math.max(maxDrawdown,(peak-value)/peak*100);
+ };
+ const closePosition=(pos,price,time,reason)=>{
+  const proceeds=pos.qty*price*.992*.995,pnl=proceeds-pos.cost;
+  cash+=proceeds;
+  trades.push({symbol:pos.symbol||"Unknown",time:pos.entryTime,exitTime:time,entryPrice:pos.entryPrice,exitPrice:price,pnl,pnlPercent:pnl/pos.cost*100,reason,cost:pos.cost});
+  open.delete(pos.address);traded.add(pos.address);
+ };
+ for(const time of times){
+  const points=snapshots.get(time);
+  for(const point of points){
+   const pos=open.get(point.address);if(!pos)continue;
+   pos.lastPrice=point.price;
+   const net=(pos.qty*point.price*.992*.995-pos.cost)/pos.cost*100;
+   if(net<=-cfg.stopLoss)closePosition(pos,point.price,time,"Stop loss");
+   else if(net>=cfg.takeProfit)closePosition(pos,point.price,time,"Take profit");
+  }
+  const candidates=points.filter(p=>p.score>=cfg.minScore&&!traded.has(p.address)&&!open.has(p.address)).sort((a,b)=>b.score-a.score);
+  for(const point of candidates){
+   if(open.size>=cfg.maxPositions)break;
+   const spend=Math.min(cfg.positionSize,cash);if(spend<.01)break;
+   const buyPrice=point.price*1.008,qty=(spend-spend*.005)/buyPrice;
+   cash-=spend;
+   open.set(point.address,{address:point.address,symbol:point.symbol,qty,cost:spend,entryPrice:buyPrice,lastPrice:point.price,entryTime:time});
+   traded.add(point.address);
+  }
+  markEquity();
+ }
+ for(const pos of [...open.values()]){
+  const last=lastByAddress.get(pos.address);
+  if(last)closePosition(pos,last.price,last.time,"End of recorded data");
+ }
+ const finalBalance=cash,netPnl=finalBalance-cfg.balance,wins=trades.filter(t=>t.pnl>0).length;
+ const grossProfit=trades.filter(t=>t.pnl>0).reduce((s,t)=>s+t.pnl,0),grossLoss=Math.abs(trades.filter(t=>t.pnl<0).reduce((s,t)=>s+t.pnl,0));
+ return {trades,startingBalance:cfg.balance,finalBalance,netPnl,returnPct:cfg.balance?netPnl/cfg.balance*100:0,winRate:trades.length?wins/trades.length*100:0,profitFactor:grossLoss>0?grossProfit/grossLoss:(grossProfit>0?Infinity:0),maxDrawdown,observations:history.length,tokensAnalyzed:lastByAddress.size};
+}
+function readSimulationInputs(){
+ const balance=Number($("simBalance").value),positionSize=Number($("simPosition").value),minScore=Number($("simScore").value);
+ if(!Number.isFinite(balance)||balance<=0||!Number.isFinite(positionSize)||positionSize<=0||!Number.isFinite(minScore)||minScore<0||minScore>100){notify("Check balance, position size and score");return null;}
+ return {balance,positionSize,minScore,maxPositions:3,stopLoss:10,takeProfit:20};
+}
+function renderSimulationResults(output,result,cfg){
+ if(!result.trades.length){output.textContent="No qualifying trades found. Collect more data or adjust the minimum score.";return;}
+ const pf=Number.isFinite(result.profitFactor)?result.profitFactor.toFixed(2):"∞";
+ output.innerHTML=`<b>Backtest results</b><br>`+
+ `Recorded observations: ${result.observations}<br>Tokens analyzed: ${result.tokensAnalyzed}<br>Trades: ${result.trades.length}<br>Win rate: ${result.winRate.toFixed(1)}%<br>`+
+ `Starting balance: ${money(result.startingBalance)}<br>Final balance: ${money(result.finalBalance)}<br>`+
+ `Net P/L: ${result.netPnl>=0?"+":""}${money(result.netPnl)} (${result.returnPct.toFixed(2)}%)<br>`+
+ `Max drawdown: ${result.maxDrawdown.toFixed(2)}%<br>Profit factor: ${pf}<br>`+
+ `Rules: score ≥ ${cfg.minScore}, stop loss ${cfg.stopLoss}%, take profit ${cfg.takeProfit}%, max ${cfg.maxPositions} open positions<br><br>`+
+ `<small>Paper simulation only. Shared cash balance, max 3 concurrent positions, estimated 0.5% fees and 0.8% slippage on each side. Uses recorded observations only; results are not predictions.</small>`+
+ `<br><br><b>Trade history</b><div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse"><tr><th>Token</th><th>Entry</th><th>Exit</th><th>P/L</th><th>Reason</th></tr>`+
+ result.trades.map(t=>`<tr><td>${esc(t.symbol)}</td><td>${tokenPrice(t.entryPrice)}</td><td>${tokenPrice(t.exitPrice)}</td><td>${t.pnl>=0?"+":""}${money(t.pnl)} (${t.pnlPercent.toFixed(2)}%)</td><td>${esc(t.reason)}</td></tr>`).join("")+
+ `</table></div>`;
+ output.className="notice";
+}
 function runBacktest(){
-  const output=$("simResults");
-  const balanceStart=Number($("simBalance").value);
-  const positionSize=Number($("simPosition").value);
-  const minScore=Number($("simScore").value);
-
-  if(!balanceStart||!positionSize||positionSize<=0){
-    output.textContent="Enter a valid balance and position size.";
-    return;
-  }
-
-  let history=[];
-  try{
-    history=JSON.parse(localStorage.getItem("grokbot-price-history-v1")||"[]");
-  }catch(e){
-    history=[];
-  }
-
-  history=history.filter(p=>
-    p&&p.address&&Number(p.time)>0&&
-    Number(p.price)>0&&Number.isFinite(Number(p.score))
-  );
-
-  if(history.length<2){
-    output.textContent="Not enough historical data yet. Keep GROKBOT open while it collects market observations.";
-    return;
-  }
-
-  const grouped={};
-  for(const point of history){
-    if(!grouped[point.address])grouped[point.address]=[];
-    grouped[point.address].push(point);
-  }
-
-  const trades=[];
-
-  for(const address of Object.keys(grouped)){
-    const points=grouped[address].sort((a,b)=>a.time-b.time);
-    if(points.length<2)continue;
-
-    const entry=points.find(p=>Number(p.score)>=minScore);
-    if(!entry)continue;
-
-    const spend=Math.min(positionSize,balanceStart);
-    const buyFee=spend*.005;
-    const buyPrice=Number(entry.price)*1.008;
-    const quantity=(spend-buyFee)/buyPrice;
-const entryPrice=Number(entry.price);
-    let exit=points[points.length-1];
-  
-    let reason="End of recorded data";
-
-    for(const point of points){
-      if(point.time<=entry.time)continue;
-      const proceeds=quantity*Number(point.price)*.992*.995;
-      const pnl=proceeds-spend;
-      const percent=pnl/spend*100;
-
-      if(percent<=-10){
-        exit=point;
-        reason="Stop loss";
-        break;
-      }
-      if(percent>=20){
-        exit=point;
-        reason="Take profit";
-        break;
-      }
-    }
-
-    const sellValue=quantity*Number(exit.price)*.992*.995;
-    trades.push({
-  symbol:entry.symbol||"Unknown",
-  time:Number(entry.time),
-  entryPrice:entryPrice,
-  exitPrice:Number(exit.price),
-  pnl:sellValue-spend,
-  pnlPercent:(sellValue-spend)/spend*100,
-  reason
-});
-  }
-
-  trades.sort((a,b)=>a.time-b.time);
-
-  if(!trades.length){
-    output.textContent=
-      "No qualifying trades found. Collect more data or adjust the minimum score.";
-    return;
-  }
-
-  let balance=balanceStart;
-  let peak=balanceStart;
-  let maxDrawdown=0;
-  let wins=0;
-  let grossProfit=0;
-  let grossLoss=0;
-
-  for(const trade of trades){
-    const actualSpend=Math.min(positionSize,balance);
-    if(actualSpend<=0)break;
-
-    const scale=actualSpend/Math.min(positionSize,balanceStart);
-    const pnl=trade.pnl*scale;
-
-    balance+=pnl;
-    if(pnl>0){
-      wins++;
-      grossProfit+=pnl;
-    }else{
-      grossLoss+=Math.abs(pnl);
-    }
-
-    peak=Math.max(peak,balance);
-    const drawdown=peak>0?(peak-balance)/peak*100:0;
-    maxDrawdown=Math.max(maxDrawdown,drawdown);
-  }
-
-  const completed=trades.length;
-  const netPnl=balance-balanceStart;
-  const returnPct=netPnl/balanceStart*100;
-  const winRate=wins/completed*100;
-  const profitFactor=grossLoss>0?(grossProfit/grossLoss).toFixed(2):"N/A";
-
-  output.innerHTML=
-    `<b>Backtest results</b><br>`+
-    `Recorded observations: ${history.length}<br>`+
-    `Tokens analyzed: ${Object.keys(grouped).length}<br>`+
-    `Trades: ${completed}<br>`+
-    `Win rate: ${winRate.toFixed(1)}%<br>`+
-    `Starting balance: $${balanceStart.toFixed(2)}<br>`+
-    `Final balance: $${balance.toFixed(2)}<br>`+
-    `Net P/L: ${netPnl>=0?"+":""}$${netPnl.toFixed(2)} (${returnPct.toFixed(2)}%)<br>`+
-    `Max drawdown: ${maxDrawdown.toFixed(2)}%<br>`+
-    `Profit factor: ${profitFactor}<br><br>`+
-    `<small>Paper simulation only. Uses recorded observations, estimated fees and slippage. Small samples are not reliable predictions.</small>`;
-output.innerHTML+=
-  `<br><br><b>Trade history</b><br>`+
-  `<div style="overflow-x:auto">`+
-  `<table style="width:100%;font-size:12px;border-collapse:collapse">`+
-  `<tr><th>Token</th><th>Entry</th><th>Exit</th><th>P/L</th><th>Reason</th></tr>`+
-  trades.map(t=>
-    `<tr>`+
-    `<td>${t.symbol}</td>`+
-    `<td>$${t.entryPrice.toFixed(8)}</td>`+
-    `<td>$${t.exitPrice.toFixed(8)}</td>`+
-    `<td>${t.pnl>=0?"+":""}$${t.pnl.toFixed(3)} (${t.pnlPercent.toFixed(2)}%)</td>`+
-    `<td>${t.reason}</td>`+
-    `</tr>`
-  ).join("")+
-  `</table></div>`;
-  output.className="notice";
+ const output=$("simResults"),cfg=readSimulationInputs();
+ if(!cfg){output.textContent="Enter valid simulation settings.";return;}
+ const history=loadPriceHistory();
+ if(history.length<2){output.textContent="Not enough historical data yet. Keep GROKBOT open while it collects market observations.";return;}
+ const result=simulatePortfolio(history,cfg);
+ renderSimulationResults(output,result,cfg);
 }
-
+function runOptimizer(){
+ const output=$("optimizerResults"),base=readSimulationInputs();
+ if(!base){output.textContent="Enter valid simulation settings first.";return;}
+ const history=loadPriceHistory();
+ if(history.length<20){output.textContent="Not enough recorded data yet. Keep GROKBOT open to collect more real observations before optimizing.";return;}
+ const scores=[60,65,70,72,75,80,85,90],stops=[6,8,10,12,15],takes=[10,15,20,25,30,40],results=[];
+ for(const minScore of scores)for(const stopLoss of stops)for(const takeProfit of takes){
+  if(takeProfit<=stopLoss)continue;
+  const cfg={...base,minScore,stopLoss,takeProfit,maxPositions:3},result=simulatePortfolio(history,cfg);
+  const samplePenalty=result.trades.length<5?(5-result.trades.length)*2:0;
+  results.push({cfg,result,rankScore:result.returnPct-result.maxDrawdown*.75-samplePenalty});
+ }
+ results.sort((a,b)=>b.rankScore-a.rankScore);
+ const top=results.slice(0,5),best=top[0];
+ output.innerHTML=`<b>Optimizer complete</b><br>Strategies tested: ${results.length}<br>`+
+ `Recorded observations: ${history.length} across ${new Set(history.map(p=>p.address)).size} tokens<br>`+
+ `<small>Ranking = return % − 0.75 × max drawdown % − small-sample penalty. Comparison heuristic, not proof of future performance.</small><br><br>`+
+ `<b>Top 5 configurations</b><div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse"><tr><th>#</th><th>Score</th><th>SL / TP</th><th>Trades</th><th>Win %</th><th>Return</th><th>DD</th></tr>`+
+ top.map((item,i)=>`<tr><td>${i+1}</td><td>${item.cfg.minScore}</td><td>${item.cfg.stopLoss}% / ${item.cfg.takeProfit}%</td><td>${item.result.trades.length}</td><td>${item.result.winRate.toFixed(1)}%</td><td>${item.result.returnPct>=0?"+":""}${item.result.returnPct.toFixed(2)}%</td><td>${item.result.maxDrawdown.toFixed(2)}%</td></tr>`).join("")+
+ `</table></div><br><b>Best tested configuration</b><br>Minimum score: ${best.cfg.minScore}<br>Stop loss: ${best.cfg.stopLoss}%<br>Take profit: ${best.cfg.takeProfit}%<br>`+
+ `Position size: ${money(best.cfg.positionSize)} · Starting balance: ${money(best.cfg.balance)} · Max open positions: 3<br>`+
+ `Net P/L: ${best.result.netPnl>=0?"+":""}${money(best.result.netPnl)} (${best.result.returnPct.toFixed(2)}%)<br>`+
+ `Trades: ${best.result.trades.length} · Win rate: ${best.result.winRate.toFixed(1)}% · Max drawdown: ${best.result.maxDrawdown.toFixed(2)}%<br><br>`+
+ `<small>Optimizer only reports simulated settings. It does not change your paper-bot settings or open positions. Small or biased samples can mislead; validate on later, unseen data.</small>`;
+ output.className="notice";
+}
 $("runBacktest").addEventListener("click",runBacktest);
+$("runOptimizer").addEventListener("click",runOptimizer);
 $("runDiagnostics").addEventListener("click",runDiagnostics);
-
 render();refreshMarket();scheduleScanner();
-
