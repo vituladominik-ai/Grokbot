@@ -31,7 +31,8 @@ function processPaper(){
  if(today!==state.dayKey){state.dayKey=today;state.dayStart=equity();state.dayRealized=0}
  for(const p of [...state.positions]){
   const price=currentPrice(p.address);if(!price)continue;p.lastPrice=price;
-  const ret=(price-p.entry)/p.entry*100;
+  const netValue=p.qty*price*(1-.008)*(1-.005);
+const ret=(netValue-p.cost)/p.cost*100;
   if(ret<=-10)sell(p,"Stop loss",price);else if(ret>=20)sell(p,"Take profit",price);
  }
  if(state.auto&&!state.paused&&!riskStop()){
