@@ -98,7 +98,26 @@ async function refreshMarket(){
    rows.push(...got.filter(Boolean));
   }
   tokens=rows.sort((a,b)=>b.score-a.score);feedAt=new Date().toISOString();
-  $("feedDot").className="dot";$("feedStatus").textContent=`Live DEX observations · ${tokens.length} pools found`;
+ const historyKey="grokbot-price-history-v1";
+let history=[];
+try{history=JSON.parse(localStorage.getItem(historyKey)||"[]")}catch(e){history=[]}
+const snapshotTime=Date.now();
+for(const t of tokens){
+  if(t.priceUsd>0){
+    history.push({
+      time:snapshotTime,
+      address:t.address,
+      symbol:t.symbol,
+      price:t.priceUsd,
+      score:t.score
+    });
+  }
+}
+try{localStorage.setItem(historyKey,JSON.stringify(history.slice(-12000)))}catch(e){}
+
+
+$("feedDot").className="dot";
+  
   $("lastUpdated").textContent=new Date(feedAt).toLocaleTimeString();
   $("discoveryNote").textContent="Discovery is partial: DEX Screener profile/boost lists are not a complete feed of every new Pump.fun launch. A score is a heuristic, not a rug-pull or holder audit.";
   processPaper();render();
