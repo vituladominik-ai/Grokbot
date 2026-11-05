@@ -244,33 +244,188 @@ function runBacktest(){
  const result=simulatePortfolio(history,cfg);
  renderSimulationResults(output,result,cfg);
 }
+
 function runOptimizer(){
- const output=$("optimizerResults"),base=readSimulationInputs();
- if(!base){output.textContent="Enter valid simulation settings first.";return;}
- const history=loadPriceHistory();
- if(history.length<20){output.textContent="Not enough recorded data yet. Keep GROKBOT open to collect more real observations before optimizing.";return;}
- const scores=[60,65,70,72,75,80,85,90],stops=[6,8,10,12,15],takes=[10,15,20,25,30,40],results=[];
- for(const minScore of scores)for(const stopLoss of stops)for(const takeProfit of takes){
-  if(takeProfit<=stopLoss)continue;
-  const cfg={...base,minScore,stopLoss,takeProfit,maxPositions:3},result=simulatePortfolio(history,cfg);
-  const samplePenalty=result.trades.length<5?(5-result.trades.length)*2:0;
-  results.push({cfg,result,rankScore:result.returnPct-result.maxDrawdown*.75-samplePenalty});
+ const output=$("optimizerResults");
+ const base=readSimulationInputs();
+
+ if(!base){
+  output.textContent="Enter valid simulation settings first.";
+  return;
  }
- results.sort((a,b)=>b.rankScore-a.rankScore);
- const top=results.slice(0,5),best=top[0];
- output.innerHTML=`<b>Optimizer complete</b><br>Strategies tested: ${results.length}<br>`+
- `Recorded observations: ${history.length} across ${new Set(history.map(p=>p.address)).size} tokens<br>`+
- `<small>Ranking = return % − 0.75 × max drawdown % − small-sample penalty. Comparison heuristic, not proof of future performance.</small><br><br>`+
- `<b>Top 5 configurations</b><div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse"><tr><th>#</th><th>Score</th><th>SL / TP</th><th>Trades</th><th>Win %</th><th>Return</th><th>DD</th></tr>`+
- top.map((item,i)=>`<tr><td>${i+1}</td><td>${item.cfg.minScore}</td><td>${item.cfg.stopLoss}% / ${item.cfg.takeProfit}%</td><td>${item.result.trades.length}</td><td>${item.result.winRate.toFixed(1)}%</td><td>${item.result.returnPct>=0?"+":""}${item.result.returnPct.toFixed(2)}%</td><td>${item.result.maxDrawdown.toFixed(2)}%</td></tr>`).join("")+
- `</table></div><br><b>Best tested configuration</b><br>Minimum score: ${best.cfg.minScore}<br>Stop loss: ${best.cfg.stopLoss}%<br>Take profit: ${best.cfg.takeProfit}%<br>`+
- `Position size: ${money(best.cfg.positionSize)} · Starting balance: ${money(best.cfg.balance)} · Max open positions: 3<br>`+
- `Net P/L: ${best.result.netPnl>=0?"+":""}${money(best.result.netPnl)} (${best.result.returnPct.toFixed(2)}%)<br>`+
- `Trades: ${best.result.trades.length} · Win rate: ${best.result.winRate.toFixed(1)}% · Max drawdown: ${best.result.maxDrawdown.toFixed(2)}%<br><br>`+
- `<small>Optimizer only reports simulated settings. It does not change your paper-bot settings or open positions. Small or biased samples can mislead; validate on later, unseen data.</small>`;
+
+ const history=loadPriceHistory();
+ const times=[...new Set(history.map(p=>p.time))].sort((a,b)=>a-b);
+
+ if(history.length<100||times.length<20){
+  output.textContent="Not enough historical data. Collect more real observations before optimization.";
+  return;
+ }
+
+ output.textContent="Optimizing strategies and running independent validation...";
+
+ const scores=[60,65,70,72,75,80,85,90];
+ const stops=[6,8,10,12,15];
+ const takes=[10,15,20,25,30,40];
+
+ function sliceByTime(start,end){
+  const selected=new Set(times.slice(start,end));
+  return history.filter(p=>selected.has(p.time));
+ }
+
+ function findBest(training){
+  const results=[];
+
+  for(const minScore of scores){
+   for(const stopLoss of stops){
+    for(const takeProfit of takes){
+     if(takeProfit<=stopLoss)continue;
+
+     const cfg={
+      ...base,
+      minScore,
+      stopLoss,
+      takeProfit,
+      maxPositions:3
+     };
+
+     const result=simulatePortfolio(training,cfg);
+
+     const samplePenalty=result.trades.length<10
+      ?(10-result.trades.length)*2
+      :0;
+
+     const rankScore=
+      result.returnPct-
+      result.maxDrawdown*.75-
+      samplePenalty;
+
+     results.push({cfg,result,rankScore});
+    }
+   }
+  }
+
+  results.sort((a,b)=>b.rankScore-a.rankScore);
+  return results;
+ }
+
+ const split=Math.floor(times.length*.7);
+ const training=sliceByTime(0,split);
+ const validation=sliceByTime(split,times.length);
+
+ if(training.length<20||validation.length<10){
+  output.textContent="Insufficient data in training or validation period. Collect more observations.";
+  return;
+ }
+
+ const optimized=findBest(training);
+ const best=optimized[0];
+
+ if(!best){
+  output.textContent="Optimizer could not find a valid strategy.";
+  return;
+ }
+
+ const validationResult=simulatePortfolio(validation,best.cfg);
+
+ // Three expanding-window walk-forward tests.
+ const walkForward=[];
+
+ for(let fold=0;fold<3;fold++){
+  const trainEnd=Math.floor(times.length*(.4+fold*.2));
+  const testEnd=Math.floor(times.length*(.6+fold*.2));
+
+  const foldTraining=sliceByTime(0,trainEnd);
+  const foldTesting=sliceByTime(trainEnd,testEnd);
+
+  if(foldTraining.length<20||foldTesting.length<5)continue;
+
+  const foldBest=findBest(foldTraining)[0];
+  if(!foldBest)continue;
+
+  const foldResult=simulatePortfolio(foldTesting,foldBest.cfg);
+
+  walkForward.push({
+   trades:foldResult.trades.length,
+   returnPct:foldResult.returnPct,
+   drawdown:foldResult.maxDrawdown,
+   winRate:foldResult.winRate
+  });
+ }
+
+ const wfAverage=walkForward.length
+  ?walkForward.reduce((sum,f)=>sum+f.returnPct,0)/walkForward.length
+  :null;
+
+ const enoughTrades=
+  best.result.trades.length>=10&&
+  validationResult.trades.length>=5;
+
+ const validationPositive=validationResult.returnPct>0;
+ const walkForwardPositive=wfAverage!==null&&wfAverage>0;
+
+ const status=enoughTrades&&validationPositive&&walkForwardPositive
+  ?"Promising — further paper testing required"
+  :"Insufficient evidence — do not adopt this strategy yet";
+
+ const top=optimized.slice(0,5);
+
+ const pf=Number.isFinite(validationResult.profitFactor)
+  ?validationResult.profitFactor.toFixed(2)
+  :"∞";
+
+ output.innerHTML=
+  `<b>VALIDATION ENGINE 1.0</b><br>`+
+  `Strategies tested: ${optimized.length}<br>`+
+  `Recorded observations: ${history.length}<br>`+
+  `Distinct timestamps: ${times.length}<br><br>`+
+
+  `<b>70% Training / 30% Holdout validation</b><br>`+
+  `Training observations: ${training.length}<br>`+
+  `Validation observations: ${validation.length}<br><br>`+
+
+  `<b>Best training configuration</b><br>`+
+  `Minimum score: ${best.cfg.minScore}<br>`+
+  `Stop loss: ${best.cfg.stopLoss}%<br>`+
+  `Take profit: ${best.cfg.takeProfit}%<br>`+
+  `Training trades: ${best.result.trades.length}<br>`+
+  `Training return: ${best.result.returnPct.toFixed(2)}%<br>`+
+  `Training drawdown: ${best.result.maxDrawdown.toFixed(2)}%<br><br>`+
+
+  `<b>Independent holdout results</b><br>`+
+  `Validation trades: ${validationResult.trades.length}<br>`+
+  `Validation win rate: ${validationResult.winRate.toFixed(1)}%<br>`+
+  `Validation return: ${validationResult.returnPct.toFixed(2)}%<br>`+
+  `Validation drawdown: ${validationResult.maxDrawdown.toFixed(2)}%<br>`+
+  `Validation profit factor: ${pf}<br><br>`+
+
+  `<b>Walk-forward validation</b><br>`+
+  `Completed folds: ${walkForward.length}/3<br>`+
+  (walkForward.length
+   ?walkForward.map((f,i)=>
+    `Fold ${i+1}: ${f.trades} trades · ${f.returnPct.toFixed(2)}% return · ${f.drawdown.toFixed(2)}% drawdown`
+   ).join("<br>")
+   : "Not enough data for walk-forward testing.")+
+  `<br>Average fold return: ${wfAverage===null?"N/A":wfAverage.toFixed(2)+"%"}<br><br>`+
+
+  `<b>Top 5 training configurations</b>`+
+  `<div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">`+
+  `<tr><th>#</th><th>Score</th><th>SL/TP</th><th>Trades</th><th>Return</th><th>DD</th></tr>`+
+  top.map((item,i)=>
+   `<tr><td>${i+1}</td><td>${item.cfg.minScore}</td>`+
+   `<td>${item.cfg.stopLoss}% / ${item.cfg.takeProfit}%</td>`+
+   `<td>${item.result.trades.length}</td>`+
+   `<td>${item.result.returnPct.toFixed(2)}%</td>`+
+   `<td>${item.result.maxDrawdown.toFixed(2)}%</td></tr>`
+  ).join("")+
+  `</table></div><br>`+
+
+  `<b>Assessment</b><br>${status}<br><br>`+
+  `<small>Training and holdout periods are chronological. Walk-forward tests independently select parameters using earlier data. All results are simulated and include estimated fees and slippage. Historical observations are sparse snapshots, not complete tick data. This is not a prediction or guarantee of future returns. No paper account settings are changed.</small>`;
+
  output.className="notice";
 }
-$("runBacktest").addEventListener("click",runBacktest);
+("runBacktest").addEventListener("click",runBacktest);
 $("runOptimizer").addEventListener("click",runOptimizer);
 $("runDiagnostics").addEventListener("click",runDiagnostics);
 render();refreshMarket();scheduleScanner();
