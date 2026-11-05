@@ -1,8 +1,8 @@
 {
   "name": "GROKBOT Solana Paper Terminal",
   "short_name": "GROKBOT",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#080d18",
   "theme_color": "#080d18",
