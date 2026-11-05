@@ -1,5 +1,6 @@
 const $=id=>document.getElementById(id);
 const money=n=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(Number(n)||0);
+const tokenPrice=n=>"$"+new Intl.NumberFormat("en-US",{maximumSignificantDigits:7}).format(Number(n)||0);
 const stateKey="grokbot-v22-iphone-paper";
 const defaults=()=>({cash:50,starting:50,dayStart:50,dayKey:new Date().toISOString().slice(0,10),dayRealized:0,positions:[],trades:[],auto:true,paused:false,limits:{maxPosition:5,maxPositions:3,dailyStop:2.5,minScore:72},lastEntries:{}});
 let state;try{state={...defaults(),...JSON.parse(localStorage.getItem(stateKey)||"{}")};state.limits={...defaults().limits,...(state.limits||{})}}catch{state=defaults()}
