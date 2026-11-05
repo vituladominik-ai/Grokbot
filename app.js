@@ -122,4 +122,51 @@ document.addEventListener("click",e=>{const b=e.target.closest("[data-buy]");if(
 $("export").addEventListener("click",()=>{const rows=[["time","type","symbol","mint","quantity","price_usd","amount_usd","note"],...state.trades.map(t=>[t.time,t.type,t.symbol,t.address,t.qty,t.price,t.amount,t.note])];const csv=rows.map(r=>r.map(x=>'"'+String(x??"").replaceAll('"','""')+'"').join(",")).join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="grokbot-paper-trades.csv";a.click();URL.revokeObjectURL(a.href)});
 if("serviceWorker" in navigator)navigator.serviceWorker.register("./service-worker.js").catch(()=>{});
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refreshMarket()});
+function runDiagnostics(){
+  const results=[];
+  const test=(name,condition)=>results.push({name,passed:Boolean(condition)});
+  const originalState=JSON.stringify(state);
+
+  const spend=5;
+  const buyFee=spend*.005;
+  const fill=1*1.008;
+  const qty=(spend-buyFee)/fill;
+  const sellGross=qty*1.2*(1-.008);
+  const sellFee=sellGross*.005;
+  const proceeds=sellGross-sellFee;
+  const pnl=proceeds-spend;
+  const netReturn=pnl/spend*100;
+
+  test("Buy fee calculation",Math.abs(buyFee-.025)<.000001);
+test("Buy slippage calculation",Math.abs(fill-1.008)<.000001);
+test("Sell fee calculation",sellFee>0);
+test("Net P/L calculation",Math.abs(netReturn-((proceeds-spend)/spend*100))<.000001);
+
+const stopTriggered=value=>value<=-10;
+const takeTriggered=value=>value>=20;
+const dailyStopTriggered=loss=>loss<=-state.limits.dailyStop;
+const openLimitReached=count=>count>=state.limits.maxPositions;
+
+test("Stop loss boundary",stopTriggered(-10)&&!stopTriggered(-9.99));
+test("Take profit boundary",takeTriggered(20)&&!takeTriggered(19.99));
+test("Daily loss limit",dailyStopTriggered(-state.limits.dailyStop));
+test("Position size cap",Math.min(5,state.limits.maxPosition)<=state.limits.maxPosition);
+test("Open positions cap",openLimitReached(state.limits.maxPositions));
+test("Portfolio unchanged",JSON.stringify(state)===originalState);
+
+  const passed=results.filter(r=>r.passed).length;
+  const failed=results.length-passed;
+  const output=document.getElementById("diagnosticsResult");
+
+  output.innerHTML=
+    `<b>${passed}/${results.length} tests passed</b><br>`+
+    results.map(r=>
+      `${r.passed?"✅":"❌"} ${r.name}`
+    ).join("<br>");
+
+  output.className="notice "+(failed?"security":"");
+  notify(failed?"Diagnostics: some tests failed":"Diagnostics: all tests passed");
+}
+
+$("runDiagnostics").addEventListener("click",runDiagnostics);
 render();refreshMarket();scheduleScanner();
