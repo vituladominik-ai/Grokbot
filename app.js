@@ -425,7 +425,7 @@ function runOptimizer(){
 
  output.className="notice";
 }
-("runBacktest").addEventListener("click",runBacktest);
+$("runBacktest").addEventListener("click",runBacktest);
 $("runOptimizer").addEventListener("click",runOptimizer);
 $("runDiagnostics").addEventListener("click",runDiagnostics);
 render();refreshMarket();scheduleScanner();
