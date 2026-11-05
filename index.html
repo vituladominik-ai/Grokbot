@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080d18"><meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="GROKBOT">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/icon-192.png">
+<title>GROKBOT — iPhone Paper Terminal</title><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="shell">
+<header class="top"><div class="brand"><div class="logo">G</div><div><b>GROKBOT</b><small>SOLANA PAPER TERMINAL</small></div></div><div class="mode"><i></i> PAPER ONLY</div></header>
+<section class="hero">
+ <div class="eyebrow">SIMULOVANÉ PORTFOLIO</div><div class="balance" id="equity">$50.00</div><div id="totalPnl" class="gain">$0.00 · 0.00%</div>
+ <div class="heroStats"><div><small>Cash</small><b id="cash">$50.00</b></div><div><small>Open positions</small><b id="positionCount">0 / 3</b></div><div><small>Daily P/L</small><b id="dailyPnl">$0.00</b></div></div>
+</section>
+<div class="statusbar"><span id="feedDot" class="dot"></span><span id="feedStatus">Connecting to live market data…</span><span id="lastUpdated">—</span></div>
+<nav class="tabs"><button class="active" data-tab="markets">Markets</button><button data-tab="positions">Positions</button><button data-tab="activity">Activity</button><button data-tab="settings">Risk settings</button></nav>
+<main>
+<section class="panel active" id="tab-markets">
+ <div class="sectionHead"><div><h2>Market scanner</h2><p>Solana kandidáti · DEX Screener</p></div><button id="refresh" class="button secondary">Refresh</button></div>
+ <div id="discoveryNote" class="notice">Loading source information…</div><div id="marketList" class="list"><div class="empty">Loading market data…</div></div>
+</section>
+<section class="panel" id="tab-positions">
+ <div class="sectionHead"><div><h2>Open positions</h2><p>Paper fills include estimated fees and slippage</p></div></div><div id="positionsList" class="list empty">No open paper positions.</div>
+</section>
+<section class="panel" id="tab-activity">
+ <div class="sectionHead"><div><h2>Trade history</h2><p>Stored locally on this device</p></div><button id="export" class="button secondary">Export CSV</button></div><div id="tradeList" class="list empty">No paper trades yet.</div>
+</section>
+<section class="panel" id="tab-settings">
+ <div class="sectionHead"><div><h2>Risk controls</h2><p>Enforced by this paper engine</p></div></div>
+ <div class="settingsCard">
+  <div class="setting"><div><b>Auto paper trading</b><small>Open simulated positions when filters pass</small></div><button id="autoToggle" class="toggle on" aria-label="Toggle auto paper trading"></button></div>
+  <label>Maximum position (USD)<input id="maxPosition" type="number" min="1" max="50" step="0.5" value="5"></label>
+  <label>Maximum open positions<input id="maxPositions" type="number" min="1" max="3" step="1" value="3"></label>
+  <label>Daily loss stop (USD)<input id="dailyStop" type="number" min="0.5" max="50" step="0.5" value="2.5"></label>
+  <label>Minimum score<input id="minScore" type="number" min="50" max="95" step="1" value="72"></label>
+  <div class="buttons"><button id="saveSettings" class="button">Save limits</button><button id="pause" class="button secondary">Pause bot</button><button id="reset" class="button danger">Reset $50 account</button></div>
+ </div>
+ <div class="notice security"><b>Wallet security</b><br>Wallet disconnected. No seed phrase, private key, deposit, withdrawal, signing or real trade functionality exists in this build. Never paste your recovery phrase into GROKBOT.</div>
+</section>
+</main>
+<footer>GROKBOT v2.2 iPhone · Paper trading only. Safari must remain open and active for scanning. iOS may suspend web pages; 24/7 operation is not guaranteed. Candidate feed is partial and is not a complete Pump.fun launch feed.</footer>
+</div>
+<div id="toast" class="toast"></div>
+<script type="module" src="/app.js"></script>
+</body></html>
