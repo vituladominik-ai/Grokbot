@@ -235,8 +235,9 @@ function runBacktest(){
     const buyFee=spend*.005;
     const buyPrice=Number(entry.price)*1.008;
     const quantity=(spend-buyFee)/buyPrice;
-
+const entryPrice=Number(entry.price);
     let exit=points[points.length-1];
+  
     let reason="End of recorded data";
 
     for(const point of points){
@@ -259,11 +260,14 @@ function runBacktest(){
 
     const sellValue=quantity*Number(exit.price)*.992*.995;
     trades.push({
-      symbol:entry.symbol||"Unknown",
-      time:Number(entry.time),
-      pnl:sellValue-spend,
-      reason
-    });
+  symbol:entry.symbol||"Unknown",
+  time:Number(entry.time),
+  entryPrice:entryPrice,
+  exitPrice:Number(exit.price),
+  pnl:sellValue-spend,
+  pnlPercent:(sellValue-spend)/spend*100,
+  reason
+});
   }
 
   trades.sort((a,b)=>a.time-b.time);
@@ -319,7 +323,21 @@ function runBacktest(){
     `Max drawdown: ${maxDrawdown.toFixed(2)}%<br>`+
     `Profit factor: ${profitFactor}<br><br>`+
     `<small>Paper simulation only. Uses recorded observations, estimated fees and slippage. Small samples are not reliable predictions.</small>`;
-
+output.innerHTML+=
+  `<br><br><b>Trade history</b><br>`+
+  `<div style="overflow-x:auto">`+
+  `<table style="width:100%;font-size:12px;border-collapse:collapse">`+
+  `<tr><th>Token</th><th>Entry</th><th>Exit</th><th>P/L</th><th>Reason</th></tr>`+
+  trades.map(t=>
+    `<tr>`+
+    `<td>${t.symbol}</td>`+
+    `<td>$${t.entryPrice.toFixed(8)}</td>`+
+    `<td>$${t.exitPrice.toFixed(8)}</td>`+
+    `<td>${t.pnl>=0?"+":""}$${t.pnl.toFixed(3)} (${t.pnlPercent.toFixed(2)}%)</td>`+
+    `<td>${t.reason}</td>`+
+    `</tr>`
+  ).join("")+
+  `</table></div>`;
   output.className="notice";
 }
 
