@@ -98,6 +98,22 @@ async function refreshMarket(){
    rows.push(...got.filter(Boolean));
   }
   tokens=rows.sort((a,b)=>b.score-a.score);feedAt=new Date().toISOString();
+  const signalKey="grokbot-signal-history-v1";
+let signalHistory=[];
+try{signalHistory=JSON.parse(localStorage.getItem(signalKey)||"[]")}catch(e){signalHistory=[]}
+const signalTime=Date.now();
+for(const t of tokens){
+  if(t.priceUsd>0){
+    signalHistory.push({
+      time:signalTime,
+      address:t.address,
+      symbol:t.symbol,
+      price:t.priceUsd,
+      score:t.score
+    });
+  }
+}
+try{localStorage.setItem(signalKey,JSON.stringify(signalHistory.slice(-12000)))}catch(e){}
   const historyKey="grokbot-price-history-v1";
   let history=[];
   try{history=JSON.parse(localStorage.getItem(historyKey)||"[]")}catch(e){history=[]}
